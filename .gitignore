@@ -1,0 +1,14 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment
+.env
+
+# Development diary - local context for Claude
+dev_diary/
+
+# OS files
+.DS_Store

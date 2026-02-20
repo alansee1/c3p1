@@ -1,0 +1,28 @@
+{
+  "name": "cortana",
+  "version": "1.0.0",
+  "description": "Jarvis-style AI assistant running on Raspberry Pi",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc && node dist/index.js"
+  },
+  "keywords": [
+    "ai",
+    "slack",
+    "assistant",
+    "claude"
+  ],
+  "author": "Alan See",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
+    "@slack/bolt": "^4.6.0",
+    "dotenv": "^17.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.0",
+    "typescript": "^5.9.3"
+  }
+}
