@@ -1,5 +1,11 @@
 import { supabase } from '../db/client';
-import { addWorkItem, completeWorkItem, getProjectBySlug } from '../db/queries';
+import {
+  addWorkItem,
+  completeWorkItem,
+  updateWorkItem,
+  deleteWorkItem,
+  getProjectBySlug,
+} from '../db/queries';
 
 interface ToolInput {
   sql?: string;
@@ -59,8 +65,8 @@ export async function executeTool(
       }
 
       case 'add_work_item': {
-        if (!input.project_slug || !input.summary) {
-          result = JSON.stringify({ error: 'project_slug and summary are required' });
+        if (!input.project_slug || !input.summary || !input.tags) {
+          result = JSON.stringify({ error: 'project_slug, summary, and tags are required' });
           break;
         }
         const project = await getProjectBySlug(input.project_slug);
@@ -68,7 +74,7 @@ export async function executeTool(
           result = JSON.stringify({ error: `Project "${input.project_slug}" not found` });
           break;
         }
-        const item = await addWorkItem(project.id, input.summary, input.tags || []);
+        const item = await addWorkItem(project.id, input.summary, input.tags);
         result = JSON.stringify({ success: true, item });
         break;
       }
@@ -80,6 +86,33 @@ export async function executeTool(
         }
         const item = await completeWorkItem(input.work_id, input.completed_summary);
         result = JSON.stringify({ success: true, item });
+        break;
+      }
+
+      case 'update_work_item': {
+        if (!input.work_id) {
+          result = JSON.stringify({ error: 'work_id is required' });
+          break;
+        }
+        if (!input.summary && !input.tags) {
+          result = JSON.stringify({ error: 'At least one of summary or tags is required' });
+          break;
+        }
+        const updates: { summary?: string; tags?: string[] } = {};
+        if (input.summary) updates.summary = input.summary;
+        if (input.tags) updates.tags = input.tags;
+        const updatedItem = await updateWorkItem(input.work_id, updates);
+        result = JSON.stringify({ success: true, item: updatedItem });
+        break;
+      }
+
+      case 'delete_work_item': {
+        if (!input.work_id) {
+          result = JSON.stringify({ error: 'work_id is required' });
+          break;
+        }
+        await deleteWorkItem(input.work_id);
+        result = JSON.stringify({ success: true, message: `Work item ${input.work_id} deleted` });
         break;
       }
 

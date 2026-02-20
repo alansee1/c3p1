@@ -32,10 +32,10 @@ export const tools: Anthropic.Tool[] = [
         tags: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Optional tags (e.g., ["feature", "ui"])',
+          description: 'Tags for the work item (e.g., ["feature", "ui"])',
         },
       },
-      required: ['project_slug', 'summary'],
+      required: ['project_slug', 'summary', 'tags'],
     },
   },
   {
@@ -51,6 +51,43 @@ export const tools: Anthropic.Tool[] = [
         completed_summary: {
           type: 'string',
           description: 'Optional summary of what was accomplished (past tense)',
+        },
+      },
+      required: ['work_id'],
+    },
+  },
+  {
+    name: 'update_work_item',
+    description: 'Update an existing work item (summary, tags).',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        work_id: {
+          type: 'number',
+          description: 'The ID of the work item to update',
+        },
+        summary: {
+          type: 'string',
+          description: 'New summary (imperative form)',
+        },
+        tags: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'New tags array',
+        },
+      },
+      required: ['work_id'],
+    },
+  },
+  {
+    name: 'delete_work_item',
+    description: 'Delete a pending work item permanently. Only works on items with status "pending".',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        work_id: {
+          type: 'number',
+          description: 'The ID of the work item to delete',
         },
       },
       required: ['work_id'],

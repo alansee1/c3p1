@@ -149,3 +149,36 @@ export async function getProjectById(id: number): Promise<Project | null> {
   }
   return data as Project;
 }
+
+export async function updateWorkItem(
+  workId: number,
+  updates: { summary?: string; tags?: string[] }
+): Promise<WorkItem> {
+  const { data, error } = await supabase
+    .from('works')
+    .update(updates)
+    .eq('id', workId)
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to update work item: ${error.message}`);
+  return data as WorkItem;
+}
+
+export async function deleteWorkItem(workId: number): Promise<void> {
+  // Only allow deleting pending work items
+  const { data: item, error: fetchError } = await supabase
+    .from('works')
+    .select('status')
+    .eq('id', workId)
+    .single();
+
+  if (fetchError) throw new Error(`Work item not found: ${fetchError.message}`);
+  if (item.status !== 'pending') {
+    throw new Error(`Can only delete pending work items (current status: ${item.status})`);
+  }
+
+  const { error } = await supabase.from('works').delete().eq('id', workId);
+
+  if (error) throw new Error(`Failed to delete work item: ${error.message}`);
+}
