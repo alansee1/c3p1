@@ -4,27 +4,11 @@ import { addMessage, getHistory, getConversationKey, hasConversation } from '../
 
 function formatErrorMessage(error: unknown): string {
   if (error instanceof Error) {
-    // Check for Anthropic API errors
-    if ('status' in error) {
-      const status = (error as { status: number }).status;
-      if (status === 529) {
-        return "Anthropic API is overloaded right now. Give it a minute and try again.";
-      }
-      if (status === 429) {
-        return "Hit the rate limit. Hang on a sec and try again.";
-      }
-      if (status === 401) {
-        return "API key issue. Check the Anthropic credentials.";
-      }
-    }
-    // Database errors
-    if (error.message.includes('Supabase') || error.message.includes('database')) {
-      return `Database error: ${error.message}`;
-    }
-    // Return the actual error message for other cases
-    return `Error: ${error.message}`;
+    const status = 'status' in error ? (error as { status: number }).status : null;
+    const statusPrefix = status ? `[${status}] ` : '';
+    return `${statusPrefix}${error.message}`;
   }
-  return "Something went wrong. Check the logs.";
+  return `Error: ${String(error)}`;
 }
 
 // Handle direct messages and thread auto-replies
