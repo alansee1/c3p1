@@ -2,6 +2,31 @@ import { app } from './app';
 import { generateResponse } from '../llm/client';
 import { addMessage, getHistory, getConversationKey, hasConversation } from '../llm/conversation';
 
+function formatErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    // Check for Anthropic API errors
+    if ('status' in error) {
+      const status = (error as { status: number }).status;
+      if (status === 529) {
+        return "Anthropic API is overloaded right now. Give it a minute and try again.";
+      }
+      if (status === 429) {
+        return "Hit the rate limit. Hang on a sec and try again.";
+      }
+      if (status === 401) {
+        return "API key issue. Check the Anthropic credentials.";
+      }
+    }
+    // Database errors
+    if (error.message.includes('Supabase') || error.message.includes('database')) {
+      return `Database error: ${error.message}`;
+    }
+    // Return the actual error message for other cases
+    return `Error: ${error.message}`;
+  }
+  return "Something went wrong. Check the logs.";
+}
+
 // Handle direct messages and thread auto-replies
 app.message(async ({ message, say, client }) => {
   // Only respond to actual user messages (not bot messages, not edits)
@@ -65,7 +90,7 @@ app.message(async ({ message, say, client }) => {
     await client.chat.postMessage({
       channel,
       thread_ts: threadTs,
-      text: 'I apologize, sir. I seem to have encountered a technical difficulty. Perhaps we might try again?',
+      text: formatErrorMessage(error),
     });
   }
 });
@@ -127,7 +152,7 @@ app.event('app_mention', async ({ event, client }) => {
     await client.chat.postMessage({
       channel,
       thread_ts: threadTs,
-      text: 'I apologize, sir. I seem to have encountered a technical difficulty.',
+      text: formatErrorMessage(error),
     });
   }
 });
