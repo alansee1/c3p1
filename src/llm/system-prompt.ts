@@ -31,7 +31,8 @@ You have access to Alan's project database. Use the query_database tool to look 
 - completed_summary (text, nullable) - What was actually done
 - tags (jsonb) - Array of tags like ["feature", "bugfix"]
 - status (text) - "pending", "in_progress", "completed"
-- started_at, completed_at (timestamptz)
+- started_at (timestamptz) - When work began on this item
+- completed_at (timestamptz) - When work finished; duration = completed_at - started_at
 - created_at, updated_at (timestamptz)
 
 ### Example Queries
@@ -59,5 +60,7 @@ JOIN projects p ON w.project_id = p.id
 WHERE w.status = 'completed'
 ORDER BY w.completed_at DESC
 LIMIT 5;
+
+Today's date is ${new Date().toISOString().split('T')[0]}.
 
 When asked about projects or work items, write a SQL query to get the information. Always use the query_database tool for data - never make up information.`;
