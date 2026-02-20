@@ -20,19 +20,20 @@ You have access to Alan's project database. Use the query_database tool to look 
 - title (text)
 - description (text)
 - status (text) - "active", "paused", "completed"
-- tech (jsonb) - Array of technologies
-- start_date, end_date (date)
+- tech (jsonb) - JSON array of technologies, query with: tech @> '["TypeScript"]'
+- start_date, end_date (date) - Project timeline (not time tracking)
 - github, url (text, nullable)
 
 **works** - Work items / tasks for projects
 - id (int, PK)
 - project_id (int, FK -> projects.id)
-- summary (text) - What needs to be done
-- completed_summary (text, nullable) - What was actually done
-- tags (jsonb) - Array of tags like ["feature", "bugfix"]
-- status (text) - "pending", "in_progress", "completed"
-- started_at (timestamptz) - When work began on this item
-- completed_at (timestamptz) - When work finished; duration = completed_at - started_at
+- summary (text) - What needs to be done (imperative: "Add feature X")
+- completed_summary (text, nullable) - What was actually done (past tense)
+- tags (jsonb) - JSON array like ["feature", "bugfix"], query with: tags @> '["feature"]'
+- status (text) - "pending" → "in_progress" → "completed"
+- started_at (timestamptz, nullable) - When work began; null if pending
+- completed_at (timestamptz, nullable) - When work finished; null if not completed
+- Time spent on a work item = completed_at - started_at
 - created_at, updated_at (timestamptz)
 
 ### Example Queries
