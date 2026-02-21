@@ -1,5 +1,5 @@
 import { supabase } from './client';
-import type { Project, WorkItem, WorkItemWithProject } from './types';
+import type { Project, WorkItem, WorkItemWithProject, Message } from './types';
 
 // Work item queries
 
@@ -181,4 +181,55 @@ export async function deleteWorkItem(workId: number): Promise<void> {
   const { error } = await supabase.from('works').delete().eq('id', workId);
 
   if (error) throw new Error(`Failed to delete work item: ${error.message}`);
+}
+
+// Message queries
+
+export async function addMessage(
+  conversationKey: string,
+  role: 'user' | 'assistant',
+  content: string,
+  agentId?: string,
+  metadata?: Record<string, unknown>
+): Promise<Message> {
+  const { data, error } = await supabase
+    .from('messages')
+    .insert({
+      conversation_key: conversationKey,
+      role,
+      content,
+      agent_id: agentId ?? null,
+      metadata: metadata ?? null,
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to add message: ${error.message}`);
+  return data as Message;
+}
+
+export async function getMessages(
+  conversationKey: string,
+  limit = 20
+): Promise<Message[]> {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('conversation_key', conversationKey)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) throw new Error(`Failed to fetch messages: ${error.message}`);
+  // Reverse to get chronological order
+  return (data as Message[]).reverse();
+}
+
+export async function hasMessages(conversationKey: string): Promise<boolean> {
+  const { count, error } = await supabase
+    .from('messages')
+    .select('*', { count: 'exact', head: true })
+    .eq('conversation_key', conversationKey);
+
+  if (error) throw new Error(`Failed to check messages: ${error.message}`);
+  return (count ?? 0) > 0;
 }

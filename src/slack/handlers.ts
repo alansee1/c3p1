@@ -41,7 +41,7 @@ app.message(async ({ message, say, client }) => {
     : getConversationKey(threadTs, channel, false);
 
   // For thread replies, only respond if we're already in this conversation
-  if (isThreadReply && !hasConversation(conversationKey)) {
+  if (isThreadReply && !(await hasConversation(conversationKey))) {
     return;
   }
 
@@ -54,14 +54,14 @@ app.message(async ({ message, say, client }) => {
     });
 
     // Add user message to history
-    addMessage(conversationKey, 'user', userMessage);
+    await addMessage(conversationKey, 'user', userMessage);
 
     // Generate response
-    const history = getHistory(conversationKey);
+    const history = await getHistory(conversationKey);
     const response = await generateResponse(history);
 
     // Add assistant response to history
-    addMessage(conversationKey, 'assistant', response);
+    await addMessage(conversationKey, 'assistant', response);
 
     // Update the "Processing..." message with actual response
     await client.chat.update({
@@ -116,14 +116,14 @@ app.event('app_mention', async ({ event, client }) => {
     });
 
     // Add user message to history
-    addMessage(conversationKey, 'user', userMessage);
+    await addMessage(conversationKey, 'user', userMessage);
 
     // Generate response
-    const history = getHistory(conversationKey);
+    const history = await getHistory(conversationKey);
     const response = await generateResponse(history);
 
     // Add assistant response to history
-    addMessage(conversationKey, 'assistant', response);
+    await addMessage(conversationKey, 'assistant', response);
 
     // Update the message with actual response
     await client.chat.update({

@@ -1,14 +1,12 @@
+import * as db from '../db/queries';
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;
 }
 
-// In-memory conversation history per conversation context
-// Key format: threadTs for threads, or `dm:${channelId}` for DMs
-// TODO: Phase 3 - persist to Supabase
-const conversations = new Map<string, Message[]>();
-
-const MAX_HISTORY = 20; // Keep last 20 messages per conversation
+const AGENT_ID = 'c3p1';
+const MAX_HISTORY = 20;
 
 /**
  * Generate a conversation key based on context
@@ -23,28 +21,20 @@ export function getConversationKey(threadTs: string | undefined, channel: string
   return threadTs || `channel:${channel}`;
 }
 
-export function addMessage(conversationKey: string, role: 'user' | 'assistant', content: string): void {
-  if (!conversations.has(conversationKey)) {
-    conversations.set(conversationKey, []);
-  }
-
-  const history = conversations.get(conversationKey)!;
-  history.push({ role, content });
-
-  // Trim to max history
-  if (history.length > MAX_HISTORY) {
-    history.splice(0, history.length - MAX_HISTORY);
-  }
+export async function addMessage(conversationKey: string, role: 'user' | 'assistant', content: string): Promise<void> {
+  await db.addMessage(
+    conversationKey,
+    role,
+    content,
+    role === 'assistant' ? AGENT_ID : undefined
+  );
 }
 
-export function getHistory(conversationKey: string): Message[] {
-  return conversations.get(conversationKey) || [];
+export async function getHistory(conversationKey: string): Promise<Message[]> {
+  const messages = await db.getMessages(conversationKey, MAX_HISTORY);
+  return messages.map(m => ({ role: m.role, content: m.content }));
 }
 
-export function clearHistory(conversationKey: string): void {
-  conversations.delete(conversationKey);
-}
-
-export function hasConversation(conversationKey: string): boolean {
-  return conversations.has(conversationKey) && conversations.get(conversationKey)!.length > 0;
+export async function hasConversation(conversationKey: string): Promise<boolean> {
+  return db.hasMessages(conversationKey);
 }

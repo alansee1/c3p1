@@ -30,3 +30,13 @@ export interface WorkItem {
 export interface WorkItemWithProject extends WorkItem {
   project: Pick<Project, 'id' | 'slug' | 'title'>;
 }
+
+export interface Message {
+  id: number;
+  conversation_key: string;
+  role: 'user' | 'assistant';
+  agent_id: string | null;
+  content: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
