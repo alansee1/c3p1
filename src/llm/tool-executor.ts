@@ -310,22 +310,25 @@ export async function executeTool(
           result = JSON.stringify({ error: `Project "${input.project_slug}" not found` });
           break;
         }
-        const item = await addWorkItem(project.id, input.summary, input.tags);
 
-        // Fetch recent summaries for style reference
+        // Fetch recent completed_summaries for style reference BEFORE creating
         const { data: recentWork } = await supabase
           .from('works')
-          .select('summary')
+          .select('completed_summary')
+          .eq('project_id', project.id)
           .eq('status', 'completed')
+          .not('completed_summary', 'is', null)
           .order('completed_at', { ascending: false })
           .limit(5);
-        const styleExamples = recentWork?.map(w => w.summary) || [];
+        const styleExamples = recentWork?.map(w => w.completed_summary) || [];
+
+        const item = await addWorkItem(project.id, input.summary, input.tags);
 
         result = JSON.stringify({
           success: true,
           item,
           style_reference: styleExamples,
-          note: 'For future items, match the voice of style_reference examples'
+          note: 'Check if the summary matches style_reference voice/structure. If not, use update_work_item to fix it.'
         });
         actionType = 'work_item_created';
         actionSummary = `Created work item: ${input.summary}`;
