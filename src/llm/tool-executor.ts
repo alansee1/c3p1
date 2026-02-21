@@ -75,7 +75,22 @@ export async function executeTool(
           break;
         }
         const item = await addWorkItem(project.id, input.summary, input.tags);
-        result = JSON.stringify({ success: true, item });
+
+        // Fetch recent summaries for style reference
+        const { data: recentWork } = await supabase
+          .from('works')
+          .select('summary')
+          .eq('status', 'completed')
+          .order('completed_at', { ascending: false })
+          .limit(5);
+        const styleExamples = recentWork?.map(w => w.summary) || [];
+
+        result = JSON.stringify({
+          success: true,
+          item,
+          style_reference: styleExamples,
+          note: 'For future items, match the voice of style_reference examples'
+        });
         break;
       }
 
