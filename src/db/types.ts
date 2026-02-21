@@ -40,3 +40,26 @@ export interface Message {
   metadata: Record<string, unknown> | null;
   created_at: string;
 }
+
+export type TriggerType = 'conversation' | 'background' | 'scheduled';
+
+export interface ActionReceipt {
+  id: number;
+  agent_id: string;
+  trigger_type: TriggerType;
+  trigger_ref: string;
+  action_type: string;
+  action_summary: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface ApiUsage {
+  id: number;
+  agent_id: string;
+  trigger_type: TriggerType;
+  trigger_ref: string;
+  tokens_in: number;
+  tokens_out: number;
+  created_at: string;
+}

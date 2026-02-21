@@ -58,7 +58,7 @@ app.message(async ({ message, say, client }) => {
 
     // Generate response
     const history = await getHistory(conversationKey);
-    const response = await generateResponse(history);
+    const response = await generateResponse(history, conversationKey);
 
     // Add assistant response to history
     await addMessage(conversationKey, 'assistant', response);
@@ -120,7 +120,7 @@ app.event('app_mention', async ({ event, client }) => {
 
     // Generate response
     const history = await getHistory(conversationKey);
-    const response = await generateResponse(history);
+    const response = await generateResponse(history, conversationKey);
 
     // Add assistant response to history
     await addMessage(conversationKey, 'assistant', response);

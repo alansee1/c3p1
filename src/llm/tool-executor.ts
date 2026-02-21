@@ -5,7 +5,15 @@ import {
   updateWorkItem,
   deleteWorkItem,
   getProjectBySlug,
+  logActionReceipt,
 } from '../db/queries';
+import type { TriggerType } from '../db/types';
+
+export interface ToolContext {
+  triggerType: TriggerType;
+  triggerRef: string;
+  agentId?: string;
+}
 
 interface ToolInput {
   sql?: string;
@@ -251,9 +259,13 @@ async function executeMemoryCommand(input: ToolInput): Promise<string> {
 
 export async function executeTool(
   name: string,
-  input: ToolInput
+  input: ToolInput,
+  context?: ToolContext
 ): Promise<string> {
   let result: string;
+  let actionType: string | null = null;
+  let actionSummary: string | null = null;
+  let actionMetadata: Record<string, unknown> | null = null;
 
   try {
     switch (name) {
@@ -282,6 +294,9 @@ export async function executeTool(
         }
 
         result = JSON.stringify({ rows: data });
+        actionType = 'db_query';
+        actionSummary = `Queried database: ${cleanedSql.slice(0, 80)}${cleanedSql.length > 80 ? '...' : ''}`;
+        actionMetadata = { sql: cleanedSql, row_count: data?.length ?? 0 };
         break;
       }
 
@@ -312,6 +327,9 @@ export async function executeTool(
           style_reference: styleExamples,
           note: 'For future items, match the voice of style_reference examples'
         });
+        actionType = 'work_item_created';
+        actionSummary = `Created work item: ${input.summary}`;
+        actionMetadata = { work_id: item.id, project_slug: input.project_slug, tags: input.tags };
         break;
       }
 
@@ -320,8 +338,11 @@ export async function executeTool(
           result = JSON.stringify({ error: 'work_id is required' });
           break;
         }
-        const item = await completeWorkItem(input.work_id, input.completed_summary);
-        result = JSON.stringify({ success: true, item });
+        const completedItem = await completeWorkItem(input.work_id, input.completed_summary);
+        result = JSON.stringify({ success: true, item: completedItem });
+        actionType = 'work_item_completed';
+        actionSummary = `Completed work item #${input.work_id}`;
+        actionMetadata = { work_id: input.work_id, completed_summary: input.completed_summary };
         break;
       }
 
@@ -339,6 +360,9 @@ export async function executeTool(
         if (input.tags) updates.tags = input.tags;
         const updatedItem = await updateWorkItem(input.work_id, updates);
         result = JSON.stringify({ success: true, item: updatedItem });
+        actionType = 'work_item_updated';
+        actionSummary = `Updated work item #${input.work_id}`;
+        actionMetadata = { work_id: input.work_id, updates };
         break;
       }
 
@@ -349,6 +373,9 @@ export async function executeTool(
         }
         await deleteWorkItem(input.work_id);
         result = JSON.stringify({ success: true, message: `Work item ${input.work_id} deleted` });
+        actionType = 'work_item_deleted';
+        actionSummary = `Deleted work item #${input.work_id}`;
+        actionMetadata = { work_id: input.work_id };
         break;
       }
 
@@ -366,5 +393,23 @@ export async function executeTool(
   }
 
   logTool(name, input, result);
+
+  // Log action receipt if we have context and a successful action
+  if (context && actionType && actionSummary) {
+    try {
+      await logActionReceipt(
+        context.triggerType,
+        context.triggerRef,
+        actionType,
+        actionSummary,
+        actionMetadata ?? undefined,
+        context.agentId
+      );
+    } catch (err) {
+      // Don't fail the tool call if logging fails
+      console.error('[ACTION_RECEIPT] Failed to log:', err);
+    }
+  }
+
   return result;
 }

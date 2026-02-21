@@ -1,5 +1,5 @@
 import { supabase } from './client';
-import type { Project, WorkItem, WorkItemWithProject, Message } from './types';
+import type { Project, WorkItem, WorkItemWithProject, Message, ActionReceipt, ApiUsage, TriggerType } from './types';
 
 // Work item queries
 
@@ -232,4 +232,56 @@ export async function hasMessages(conversationKey: string): Promise<boolean> {
 
   if (error) throw new Error(`Failed to check messages: ${error.message}`);
   return (count ?? 0) > 0;
+}
+
+// Action receipt logging
+
+export async function logActionReceipt(
+  triggerType: TriggerType,
+  triggerRef: string,
+  actionType: string,
+  actionSummary: string,
+  metadata?: Record<string, unknown>,
+  agentId = 'c3p1'
+): Promise<ActionReceipt> {
+  const { data, error } = await supabase
+    .from('action_receipts')
+    .insert({
+      agent_id: agentId,
+      trigger_type: triggerType,
+      trigger_ref: triggerRef,
+      action_type: actionType,
+      action_summary: actionSummary,
+      metadata: metadata ?? null,
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to log action receipt: ${error.message}`);
+  return data as ActionReceipt;
+}
+
+// API usage logging
+
+export async function logApiUsage(
+  triggerType: TriggerType,
+  triggerRef: string,
+  tokensIn: number,
+  tokensOut: number,
+  agentId = 'c3p1'
+): Promise<ApiUsage> {
+  const { data, error } = await supabase
+    .from('api_usage')
+    .insert({
+      agent_id: agentId,
+      trigger_type: triggerType,
+      trigger_ref: triggerRef,
+      tokens_in: tokensIn,
+      tokens_out: tokensOut,
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to log API usage: ${error.message}`);
+  return data as ApiUsage;
 }
