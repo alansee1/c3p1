@@ -44,6 +44,7 @@ Run these SQL scripts in Supabase SQL Editor:
 
 1. `scripts/create-query-function.sql` - Enables raw SELECT queries via RPC
 2. `scripts/create-messages-table.sql` - Conversation history storage
+3. `scripts/create-memories-table.sql` - Persistent memory for learning/adaptation
 
 ## Project Structure
 

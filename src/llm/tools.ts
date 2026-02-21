@@ -1,6 +1,12 @@
 import type Anthropic from '@anthropic-ai/sdk';
 
-export const tools: Anthropic.Tool[] = [
+// Memory tool - built-in type for persistent storage
+export const memoryTool = {
+  type: 'memory_20250818' as const,
+  name: 'memory' as const,
+};
+
+export const customTools: Anthropic.Tool[] = [
   {
     name: 'query_database',
     description: `Execute a read-only SQL query against the database. Use this to look up information about projects, work items, etc. Only SELECT queries are allowed.`,
@@ -94,3 +100,6 @@ export const tools: Anthropic.Tool[] = [
     },
   },
 ];
+
+// Combined tools array including memory
+export const tools = [...customTools, memoryTool] as Anthropic.Messages.Tool[];
