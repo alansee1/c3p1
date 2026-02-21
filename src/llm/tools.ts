@@ -101,5 +101,7 @@ export const customTools: Anthropic.Tool[] = [
   },
 ];
 
-// Combined tools array including memory
-export const tools = [...customTools, memoryTool] as Anthropic.Messages.Tool[];
+// Combined tools array
+// Memory tool disabled for now - enable when ready for token cost
+// export const tools = [...customTools, memoryTool] as Anthropic.Messages.Tool[];
+export const tools = customTools as Anthropic.Messages.Tool[];
