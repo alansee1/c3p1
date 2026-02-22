@@ -63,3 +63,17 @@ export interface ApiUsage {
   tokens_out: number;
   created_at: string;
 }
+
+export type TaskStatus = 'running' | 'completed' | 'failed';
+
+export interface TaskRun {
+  id: number;
+  task_name: string;
+  agent_id: string;
+  status: TaskStatus;
+  started_at: string;
+  completed_at: string | null;
+  result_summary: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}

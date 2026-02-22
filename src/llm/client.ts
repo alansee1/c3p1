@@ -3,7 +3,7 @@ import { config } from '../config';
 import { SYSTEM_PROMPT } from './system-prompt';
 import { tools } from './tools';
 import { executeTool, ToolContext } from './tool-executor';
-import { logApiUsage } from '../db/queries';
+import { logApiUsage, getActionReceipts } from '../db/queries';
 
 const client = new Anthropic({
   apiKey: config.anthropic.apiKey,
@@ -35,6 +35,15 @@ function extractText(content: ContentBlock[]): string {
     .join('\n');
 }
 
+// Build action context from past receipts
+async function buildActionContext(conversationKey: string): Promise<string> {
+  const receipts = await getActionReceipts(conversationKey);
+  if (receipts.length === 0) return '';
+
+  const actionLines = receipts.map((r) => `- ${r.action_type}: ${r.action_summary}`);
+  return `\n\n## Actions Already Taken in This Conversation\n${actionLines.join('\n')}\n\nDo not repeat these actions.`;
+}
+
 export async function generateResponse(
   history: SimpleMessage[],
   conversationKey?: string
@@ -47,6 +56,10 @@ export async function generateResponse(
     ? { triggerType: 'conversation', triggerRef: conversationKey }
     : undefined;
 
+  // Build system prompt with action context to prevent duplicate actions
+  const actionContext = conversationKey ? await buildActionContext(conversationKey) : '';
+  const systemPrompt = SYSTEM_PROMPT + actionContext;
+
   let totalTokensIn = 0;
   let totalTokensOut = 0;
 
@@ -54,7 +67,7 @@ export async function generateResponse(
     const response = await client.messages.create({
       model: config.anthropic.model,
       max_tokens: 1024,
-      system: SYSTEM_PROMPT,
+      system: systemPrompt,
       tools,
       messages,
     });

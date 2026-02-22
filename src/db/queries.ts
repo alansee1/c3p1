@@ -1,5 +1,5 @@
 import { supabase } from './client';
-import type { Project, WorkItem, WorkItemWithProject, Message, ActionReceipt, ApiUsage, TriggerType } from './types';
+import type { Project, WorkItem, WorkItemWithProject, Message, ActionReceipt, ApiUsage, TriggerType, TaskRun, TaskStatus } from './types';
 
 // Work item queries
 
@@ -234,6 +234,23 @@ export async function hasMessages(conversationKey: string): Promise<boolean> {
   return (count ?? 0) > 0;
 }
 
+// Action receipt queries
+
+export async function getActionReceipts(
+  triggerRef: string,
+  limit = 10
+): Promise<ActionReceipt[]> {
+  const { data, error } = await supabase
+    .from('action_receipts')
+    .select('*')
+    .eq('trigger_ref', triggerRef)
+    .order('created_at', { ascending: true })
+    .limit(limit);
+
+  if (error) throw new Error(`Failed to fetch action receipts: ${error.message}`);
+  return data as ActionReceipt[];
+}
+
 // Action receipt logging
 
 export async function logActionReceipt(
@@ -284,4 +301,68 @@ export async function logApiUsage(
 
   if (error) throw new Error(`Failed to log API usage: ${error.message}`);
   return data as ApiUsage;
+}
+
+// Task run tracking
+
+export async function startTaskRun(
+  taskName: string,
+  metadata?: Record<string, unknown>,
+  agentId = 'c3p1'
+): Promise<TaskRun> {
+  const { data, error } = await supabase
+    .from('task_runs')
+    .insert({
+      task_name: taskName,
+      agent_id: agentId,
+      status: 'running',
+      metadata: metadata ?? null,
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to start task run: ${error.message}`);
+  return data as TaskRun;
+}
+
+export async function completeTaskRun(
+  taskRunId: number,
+  resultSummary: string,
+  metadata?: Record<string, unknown>
+): Promise<TaskRun> {
+  const updateData: Record<string, unknown> = {
+    status: 'completed',
+    completed_at: new Date().toISOString(),
+    result_summary: resultSummary,
+  };
+  if (metadata) updateData.metadata = metadata;
+
+  const { data, error } = await supabase
+    .from('task_runs')
+    .update(updateData)
+    .eq('id', taskRunId)
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to complete task run: ${error.message}`);
+  return data as TaskRun;
+}
+
+export async function failTaskRun(
+  taskRunId: number,
+  errorMessage: string
+): Promise<TaskRun> {
+  const { data, error } = await supabase
+    .from('task_runs')
+    .update({
+      status: 'failed',
+      completed_at: new Date().toISOString(),
+      result_summary: errorMessage,
+    })
+    .eq('id', taskRunId)
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to fail task run: ${error.message}`);
+  return data as TaskRun;
 }
