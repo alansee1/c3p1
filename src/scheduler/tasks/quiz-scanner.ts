@@ -41,23 +41,16 @@ interface AnalyzedPost {
   draftResponse: string;
 }
 
-// Subreddits to monitor for new posts (recommendation-focused)
-const SUBREDDITS_TO_MONITOR = [
-  'gamingsuggestions',
-  'ShouldIbuythisgame',
-  'CoOpGaming',
-  'boardgames',
-  'gamesuggestions',
-  'IndianGaming',
-  'GamerPals',
-];
-
-// Search queries for broader Reddit search
+// Targeted search queries - quotes matter for relevance
 const SEARCH_QUERIES = [
-  'looking for multiplayer game',
-  'recommend geography quiz',
-  'trivia game friends',
-  'looking for quiz game',
+  '"browser game" friends',
+  '"browser game" multiplayer',
+  '"co-op" "browser game"',
+  '"online game" "play with friends"',
+  'subreddit:gamingsuggestions browser',
+  'subreddit:gamingsuggestions "play with friends"',
+  'subreddit:gamingsuggestions multiplayer online',
+  'subreddit:WebGames multiplayer',
 ];
 
 const USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36';
@@ -87,14 +80,7 @@ function parseRedditPosts(response: RedditResponse): SearchResult[] {
   }));
 }
 
-// Search within a specific subreddit for new posts
-async function searchSubreddit(subreddit: string): Promise<SearchResult[]> {
-  const url = `https://www.reddit.com/r/${subreddit}/new.json?limit=25`;
-  const response = fetchRedditJson(url);
-  return parseRedditPosts(response);
-}
-
-// Broad Reddit search with a query
+// Reddit search with a query
 async function searchReddit(query: string): Promise<SearchResult[]> {
   const params = new URLSearchParams({
     q: query,
@@ -156,27 +142,26 @@ async function analyzePost(
   result: SearchResult,
   ctx: TaskContext
 ): Promise<AnalyzedPost> {
-  const prompt = `You are helping find marketing opportunities for Quizio (quizio.io), a geography quiz game where players name all countries, US states, etc.
+  const prompt = `You are helping find marketing opportunities for Quizio (quizio.io), a free multiplayer browser game where players compete to name countries, US states, capitals, etc. on a map. Great for playing with friends - no download needed.
 
-Analyze this search result and determine if it's a good opportunity to organically mention Quizio:
+Analyze this Reddit post and determine if it's a good opportunity to organically mention Quizio:
 
 Title: ${result.title}
 URL: ${result.link}
-Snippet: ${result.snippet}
+Content: ${result.snippet}
 
 Respond in JSON format:
 {
-  "relevant": true/false,  // Is this actually about geography/country naming games?
-  "score": 1-10,           // How good an opportunity (10 = perfect fit, 1 = not worth it)
+  "relevant": true/false,  // Is this someone looking for browser games, multiplayer games, games to play with friends, trivia/quiz games, or geography games?
+  "score": 1-10,           // How good an opportunity (10 = perfect fit asking for exactly this, 1 = not worth it)
   "reason": "...",         // Brief explanation
-  "draftResponse": "..."   // If score >= 6, draft a helpful, non-spammy response that naturally mentions Quizio
+  "draftResponse": "..."   // If score >= 6, draft a helpful Reddit comment that naturally mentions Quizio. Be casual, not salesy.
 }
 
-Guidelines for responses:
-- Be helpful first, promotional second
-- Don't be pushy or spammy
-- Only mention Quizio if it genuinely fits the conversation
-- Keep it casual and authentic`;
+Score guide:
+- 8-10: Asking specifically for browser/multiplayer/trivia games with friends
+- 5-7: General game recommendations where Quizio could fit
+- 1-4: Not really relevant (single player, specific genre, etc.)`;
 
   const response = await claude.messages.create({
     model: 'claude-sonnet-4-20250514',
@@ -273,21 +258,7 @@ export async function runQuizScanner(ctx: TaskContext): Promise<string> {
     }
   }
 
-  // Step 1a: Monitor subreddits for new posts
-  for (const subreddit of SUBREDDITS_TO_MONITOR) {
-    try {
-      await ctx.logAction('subreddit_scan', `Scanning r/${subreddit}`, { subreddit });
-      const results = await searchSubreddit(subreddit);
-      await processResults(results, `r/${subreddit}`);
-
-      // Small delay between requests to be nice
-      await new Promise((r) => setTimeout(r, 300));
-    } catch (error) {
-      console.error(`[QUIZ_SCANNER] Error scanning r/${subreddit}:`, error);
-    }
-  }
-
-  // Step 1b: Broad search with queries
+  // Search Reddit with targeted queries
   for (const query of SEARCH_QUERIES) {
     try {
       await ctx.logAction('reddit_search', `Searching Reddit: "${query}"`, { query });
