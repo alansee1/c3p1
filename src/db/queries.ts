@@ -55,6 +55,22 @@ export async function getRecentCompletedWork(
   return data as WorkItemWithProject[];
 }
 
+export async function getCompletedWorkSince(
+  hoursAgo = 24
+): Promise<WorkItemWithProject[]> {
+  const since = new Date(Date.now() - hoursAgo * 60 * 60 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from('works')
+    .select('*, project:projects(id, slug, title)')
+    .eq('status', 'completed')
+    .gte('completed_at', since)
+    .order('completed_at', { ascending: true });
+
+  if (error) throw new Error(`Failed to fetch completed work: ${error.message}`);
+  return data as WorkItemWithProject[];
+}
+
 export async function addWorkItem(
   projectId: number,
   summary: string,
@@ -249,6 +265,46 @@ export async function getActionReceipts(
 
   if (error) throw new Error(`Failed to fetch action receipts: ${error.message}`);
   return data as ActionReceipt[];
+}
+
+export async function getRecentActionReceipts(
+  hoursAgo = 24
+): Promise<ActionReceipt[]> {
+  const since = new Date(Date.now() - hoursAgo * 60 * 60 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from('action_receipts')
+    .select('*')
+    .gte('created_at', since)
+    .order('created_at', { ascending: true });
+
+  if (error) throw new Error(`Failed to fetch recent action receipts: ${error.message}`);
+  return data as ActionReceipt[];
+}
+
+export async function getRecentApiUsage(
+  hoursAgo = 24
+): Promise<{ tokensIn: number; tokensOut: number; cost: number }> {
+  const since = new Date(Date.now() - hoursAgo * 60 * 60 * 1000).toISOString();
+
+  const { data, error } = await supabase
+    .from('api_usage')
+    .select('tokens_in, tokens_out')
+    .gte('created_at', since);
+
+  if (error) throw new Error(`Failed to fetch recent API usage: ${error.message}`);
+
+  let tokensIn = 0;
+  let tokensOut = 0;
+  for (const row of data || []) {
+    tokensIn += row.tokens_in;
+    tokensOut += row.tokens_out;
+  }
+
+  // Sonnet pricing: $3/1M input, $15/1M output
+  const cost = (tokensIn / 1_000_000) * 3 + (tokensOut / 1_000_000) * 15;
+
+  return { tokensIn, tokensOut, cost };
 }
 
 // Action receipt logging

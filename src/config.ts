@@ -22,4 +22,10 @@ export const config = {
     url: requireEnv('SUPABASE_URL'),
     serviceRoleKey: requireEnv('SUPABASE_SERVICE_ROLE_KEY'),
   },
+  twitter: {
+    apiKey: process.env.TWITTER_API_KEY,
+    apiKeySecret: process.env.TWITTER_API_KEY_SECRET,
+    accessToken: process.env.TWITTER_ACCESS_TOKEN,
+    accessTokenSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET,
+  },
 };
