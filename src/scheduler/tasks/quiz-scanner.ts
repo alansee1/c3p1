@@ -152,16 +152,23 @@ Content: ${result.snippet}
 
 Respond in JSON format:
 {
-  "relevant": true/false,  // Is this someone looking for browser games, multiplayer games, games to play with friends, trivia/quiz games, or geography games?
+  "relevant": true/false,  // Is this someone ASKING for game recommendations?
   "score": 1-10,           // How good an opportunity (10 = perfect fit asking for exactly this, 1 = not worth it)
   "reason": "...",         // Brief explanation
-  "draftResponse": "..."   // If score >= 6, draft a helpful Reddit comment that naturally mentions Quizio. Be casual, not salesy.
+  "draftResponse": "..."   // If score >= 8, draft a helpful Reddit comment that naturally mentions Quizio. Be casual, not salesy.
 }
 
+AUTOMATIC LOW SCORE (1-2) - these are NOT opportunities:
+- Someone promoting/sharing their own game or project
+- SEO content, guides, articles, or listicles
+- Someone sharing a game they found (not asking for recommendations)
+- News, announcements, or updates about games
+- "Check out my game" or "I made this" posts
+
 Score guide:
-- 8-10: Asking specifically for browser/multiplayer/trivia games with friends
-- 5-7: General game recommendations where Quizio could fit
-- 1-4: Not really relevant (single player, specific genre, etc.)`;
+- 8-10: Someone ASKING for browser/multiplayer/trivia/geography games to play with friends
+- 5-7: Someone asking for general game recommendations where Quizio could fit
+- 1-4: Not asking for recommendations, or wrong genre entirely`;
 
   const response = await claude.messages.create({
     model: 'claude-sonnet-4-20250514',
@@ -303,9 +310,9 @@ export async function runQuizScanner(ctx: TaskContext): Promise<string> {
     }
   }
 
-  // Step 3: Filter to high-scoring opportunities (score >= 6)
+  // Step 3: Filter to high-scoring opportunities (score >= 8)
   const goodOpportunities = analyzedPosts.filter(
-    (p) => p.relevant && p.score >= 6
+    (p) => p.relevant && p.score >= 8
   );
 
   if (goodOpportunities.length > 0) {
@@ -317,5 +324,5 @@ export async function runQuizScanner(ctx: TaskContext): Promise<string> {
     return `Found ${newPosts.length} posts, ${goodOpportunities.length} good opportunities sent to Slack`;
   }
 
-  return `Found ${newPosts.length} posts, none scored high enough (need >= 6)`;
+  return `Found ${newPosts.length} posts, none scored high enough (need >= 8)`;
 }
