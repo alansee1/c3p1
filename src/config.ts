@@ -13,6 +13,7 @@ export const config = {
   slack: {
     botToken: requireEnv('SLACK_BOT_TOKEN'),
     appToken: requireEnv('SLACK_APP_TOKEN'),
+    notificationChannel: process.env.SLACK_NOTIFICATION_CHANNEL || 'C0AFW2TSTF1',
   },
   anthropic: {
     apiKey: requireEnv('ANTHROPIC_API_KEY'),

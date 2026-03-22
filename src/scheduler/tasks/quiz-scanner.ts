@@ -207,7 +207,7 @@ Score guide:
 }
 
 async function sendToSlack(posts: AnalyzedPost[]): Promise<void> {
-  const channel = 'C0AFW2TSTF1';
+  const channel = config.slack.notificationChannel;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const blocks: any[] = [
