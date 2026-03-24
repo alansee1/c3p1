@@ -1,10 +1,9 @@
-import Anthropic from '@anthropic-ai/sdk';
+import * as fs from 'fs';
+import * as path from 'path';
 import '../src/config';
-import { config } from '../src/config';
 import { getRecentActionReceipts, getRecentApiUsage, getCompletedWorkSince } from '../src/db/queries';
+import { generateInfographic, type ReportData } from '../src/twitter/infographic';
 import type { ActionReceipt, WorkItemWithProject } from '../src/db/types';
-
-const claude = new Anthropic({ apiKey: config.anthropic.apiKey });
 
 function formatDate(): string {
   const now = new Date();
@@ -12,113 +11,72 @@ function formatDate(): string {
   return `${months[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
 }
 
-function buildC3P1Report(receipts: ActionReceipt[]): string[] {
-  const items: string[] = [];
+function countActionTypes(receipts: ActionReceipt[]): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const r of receipts) {
     counts[r.action_type] = (counts[r.action_type] || 0) + 1;
   }
-
-  if (counts['reddit_search']) items.push(`Ran ${counts['reddit_search']} Reddit searches`);
-  if (counts['post_analyzed']) items.push(`Analyzed ${counts['post_analyzed']} posts`);
-  if (counts['slack_notification']) items.push(`Sent ${counts['slack_notification']} Slack notification(s)`);
-  if (counts['tweet_posted']) items.push(`Posted ${counts['tweet_posted']} tweet(s)`);
-
-  return items;
+  return counts;
 }
 
-function groupWorkByProject(workItems: WorkItemWithProject[]): Record<string, string[]> {
-  const byProject: Record<string, string[]> = {};
+function calculateHoursWorked(workItems: WorkItemWithProject[]): number {
+  let totalMs = 0;
   for (const item of workItems) {
-    const slug = item.project?.slug || 'unknown';
-    if (!byProject[slug]) byProject[slug] = [];
-    const summary = item.completed_summary || item.summary;
-    byProject[slug].push(summary);
-  }
-  return byProject;
-}
-
-async function summarizeAlanWork(byProject: Record<string, string[]>): Promise<Record<string, string>> {
-  const result: Record<string, string> = {};
-
-  for (const [project, items] of Object.entries(byProject)) {
-    if (items.length === 1 && items[0].length <= 25) {
-      result[project] = items[0];
-    } else {
-      const prompt = `Summarize this work in 20 characters or less for a tweet. Be concise, no fluff.
-
-Project: ${project}
-Work items:
-${items.map(i => `- ${i}`).join('\n')}
-
-Reply with ONLY the summary, no quotes.`;
-
-      const response = await claude.messages.create({
-        model: config.anthropic.model,
-        max_tokens: 30,
-        messages: [{ role: 'user', content: prompt }],
-      });
-
-      const summary = response.content[0].type === 'text'
-        ? response.content[0].text.trim().slice(0, 25)
-        : `${items.length} items`;
-
-      result[project] = summary;
+    if (item.started_at && item.completed_at) {
+      const start = new Date(item.started_at).getTime();
+      const end = new Date(item.completed_at).getTime();
+      if (end > start) {
+        totalMs += end - start;
+      }
     }
   }
-
-  return result;
-}
-
-function buildTweetText(c3p1Items: string[], alanWork: Record<string, string>, cost: number): string {
-  const date = formatDate();
-  let tweet = `📊 ${date} Report\n\n`;
-
-  if (c3p1Items.length > 0) {
-    tweet += `🤖 Things I did:\n`;
-    for (const item of c3p1Items.slice(0, 3)) {
-      tweet += `✓ ${item}\n`;
-    }
-    tweet += `\n`;
-  }
-
-  const projects = Object.keys(alanWork);
-  if (projects.length > 0) {
-    tweet += `👤 Things Alan did:\n`;
-    for (const project of projects.slice(0, 3)) {
-      tweet += `${project}: ${alanWork[project]}\n`;
-    }
-    tweet += `\n`;
-  }
-
-  if (c3p1Items.length === 0 && projects.length === 0) {
-    tweet += `No activity today.\n\n`;
-  }
-
-  tweet += `💰 API: $${cost.toFixed(2)}`;
-  tweet += `\n\n#buildinpublic`;
-
-  return tweet;
+  return totalMs / (1000 * 60 * 60);
 }
 
 async function main() {
+  console.log('Fetching data...');
   const receipts = await getRecentActionReceipts(24);
   const workItems = await getCompletedWorkSince(24);
   const usage = await getRecentApiUsage(24);
 
-  const c3p1Items = buildC3P1Report(receipts);
-  const workByProject = groupWorkByProject(workItems);
-  const alanWork = await summarizeAlanWork(workByProject);
-  const tweet = buildTweetText(c3p1Items, alanWork, usage.cost);
+  const actionCounts = countActionTypes(receipts);
+  const itemCount = workItems.length;
+  const hoursWorked = calculateHoursWorked(workItems);
 
-  console.log(`\n--- PREVIEW (${tweet.length} chars) ---\n`);
-  console.log(tweet);
-  console.log(`\n--- END PREVIEW ---`);
+  // Group work items by project
+  const projectCounts: Record<string, number> = {};
+  for (const item of workItems) {
+    const slug = item.project?.slug || 'other';
+    projectCounts[slug] = (projectCounts[slug] || 0) + 1;
+  }
+  const projects = Object.entries(projectCounts)
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
 
-  console.log(`\nDebug info:`);
-  console.log(`- Action receipts: ${receipts.length}`);
-  console.log(`- Work items completed: ${workItems.length}`);
+  console.log('\nReport data:');
+  console.log(`- Action counts:`, actionCounts);
+  console.log(`- Projects:`, projects);
+  console.log(`- Items shipped: ${itemCount}`);
+  console.log(`- Hours worked: ${hoursWorked.toFixed(2)}`);
   console.log(`- API cost: $${usage.cost.toFixed(4)}`);
+
+  console.log('\nGenerating infographic...');
+  const reportData: ReportData = {
+    date: formatDate(),
+    actionCounts,
+    projects,
+    itemCount,
+    hoursWorked,
+    apiCost: usage.cost,
+  };
+
+  const imageBuffer = await generateInfographic(reportData);
+
+  const outputPath = path.join(__dirname, 'preview-infographic.png');
+  fs.writeFileSync(outputPath, imageBuffer);
+
+  console.log(`\n✅ Infographic saved to: ${outputPath}`);
+  console.log(`   Size: ${(imageBuffer.length / 1024).toFixed(1)} KB`);
 }
 
-main();
+main().catch(console.error);
