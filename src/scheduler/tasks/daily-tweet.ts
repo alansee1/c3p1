@@ -5,7 +5,9 @@ import type { TaskContext } from '../index';
 import type { ActionReceipt, WorkItemWithProject } from '../../db/types';
 
 function formatDate(): string {
+  // Report is for yesterday's activity (task runs at midnight)
   const now = new Date();
+  now.setDate(now.getDate() - 1);
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   return `${months[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
 }
