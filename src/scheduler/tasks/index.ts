@@ -1,6 +1,7 @@
 import { registerTask } from '../index';
 import { runQuizScanner } from './quiz-scanner';
 import { runDailyTweet } from './daily-tweet';
+import { runQuizIdeasScanner } from './quiz-ideas';
 
 export function registerAllTasks(): void {
   // Quiz scanner - runs daily at 9am
@@ -15,5 +16,12 @@ export function registerAllTasks(): void {
     name: 'daily-tweet',
     schedule: '0 8 * * *', // Midnight PST = 8 AM UTC
     handler: runDailyTweet,
+  });
+
+  // Quiz ideas - runs weekly on Sundays at 10 AM UTC
+  registerTask({
+    name: 'quiz-ideas',
+    schedule: '0 10 * * 0', // Sundays at 10 AM UTC
+    handler: runQuizIdeasScanner,
   });
 }
