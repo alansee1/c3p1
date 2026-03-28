@@ -3,6 +3,7 @@ import { execSync } from 'child_process';
 import { config } from '../../config';
 import { supabase } from '../../db/client';
 import { app } from '../../slack/app';
+import { addMessage, getConversationKey } from '../../llm/conversation';
 import type { TaskContext } from '../index';
 
 const claude = new Anthropic({ apiKey: config.anthropic.apiKey });
@@ -220,6 +221,9 @@ async function sendToSlack(posts: AnalyzedPost[]): Promise<void> {
     },
   ];
 
+  // Build plain text version for conversation history
+  const plainTextParts = [`Found ${posts.length} Quizio opportunities:`];
+
   for (const post of posts) {
     blocks.push({
       type: 'section',
@@ -230,13 +234,24 @@ async function sendToSlack(posts: AnalyzedPost[]): Promise<void> {
     });
 
     blocks.push({ type: 'divider' });
+
+    // Add to plain text for conversation history
+    plainTextParts.push(
+      `\n${post.result.title}\nURL: ${post.result.link}\nScore: ${post.score}/10 - ${post.reason}\nDraft response: ${post.draftResponse}`
+    );
   }
 
-  await app.client.chat.postMessage({
+  const response = await app.client.chat.postMessage({
     channel,
     text: `Found ${posts.length} Quizio opportunities`,
     blocks,
   });
+
+  // Save to conversation history so C3P1 remembers what it posted
+  if (response.ts) {
+    const conversationKey = getConversationKey(response.ts, channel, false);
+    await addMessage(conversationKey, 'assistant', plainTextParts.join('\n'));
+  }
 }
 
 export async function runQuizScanner(ctx: TaskContext): Promise<string> {
