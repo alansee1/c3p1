@@ -286,7 +286,7 @@ export async function runQuizIdeasScanner(ctx: TaskContext): Promise<string> {
 
   // Send to Slack
   await sendToSlack(ideas, pages.length);
-  await ctx.logAction('slack_notification', `Sent ${ideas.length} quiz ideas to Slack`, {
+  await ctx.logAction('quiz_ideas_posted', `Sent ${ideas.length} quiz ideas to Slack`, {
     count: ideas.length,
   });
 
