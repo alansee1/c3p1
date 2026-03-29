@@ -2,6 +2,7 @@ import { registerTask } from '../index';
 import { runQuizScanner } from './quiz-scanner';
 import { runDailyTweet } from './daily-tweet';
 import { runQuizIdeasScanner } from './quiz-ideas';
+import { runTwitterMentions } from './twitter-mentions';
 
 export function registerAllTasks(): void {
   // Quiz scanner - runs daily at 9am
@@ -23,5 +24,12 @@ export function registerAllTasks(): void {
     name: 'quiz-ideas',
     schedule: '0 10 * * 0', // Sundays at 10 AM UTC
     handler: runQuizIdeasScanner,
+  });
+
+  // Twitter mentions - runs daily at 10 AM UTC (2 AM PST)
+  registerTask({
+    name: 'twitter-mentions',
+    schedule: '0 10 * * *', // 10 AM UTC daily
+    handler: runTwitterMentions,
   });
 }

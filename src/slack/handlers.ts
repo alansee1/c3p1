@@ -1,6 +1,9 @@
 import { app } from './app';
 import { generateResponse } from '../llm/client';
 import { addMessage, getHistory, getConversationKey, hasConversation } from '../llm/conversation';
+import { replyToTweet } from '../twitter/client';
+import { pendingReplies } from '../scheduler/tasks/twitter-mentions';
+import { logActionReceipt } from '../db/queries';
 
 function formatErrorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -138,5 +141,130 @@ app.event('app_mention', async ({ event, client }) => {
       thread_ts: threadTs,
       text: formatErrorMessage(error),
     });
+  }
+});
+
+// Handle X reply approval button
+app.action(/^approve_reply_/, async ({ action, ack, client, body }) => {
+  await ack();
+
+  if (!('action_id' in action)) return;
+
+  // Extract mention ID from action_id (format: approve_reply_<mentionId>)
+  const mentionId = action.action_id.replace('approve_reply_', '');
+  const pending = pendingReplies.get(mentionId);
+
+  if (!pending) {
+    await client.chat.postMessage({
+      channel: body.channel?.id || '',
+      text: 'This reply approval has expired. Please run the mentions check again.',
+    });
+    return;
+  }
+
+  try {
+    // Post the reply to X
+    const result = await replyToTweet(pending.mention.id, pending.draftReply);
+
+    if (result.success) {
+      // Update the Slack message to show it was approved
+      await client.chat.update({
+        channel: pending.slackChannel,
+        ts: pending.slackTs,
+        text: `Reply posted to @${pending.mention.authorUsername}`,
+        blocks: [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `*Replied to @${pending.mention.authorUsername}:*\n${pending.draftReply}`,
+            },
+          },
+          {
+            type: 'context',
+            elements: [
+              {
+                type: 'mrkdwn',
+                text: `Posted | <https://twitter.com/c_3p1_agent/status/${result.tweetId}|View reply>`,
+              },
+            ],
+          },
+        ],
+      });
+
+      // Log the action
+      await logActionReceipt(
+        'conversation',
+        `slack_approval_${mentionId}`,
+        'x_reply_posted',
+        `Replied to @${pending.mention.authorUsername}`,
+        {
+          mentionId,
+          replyTweetId: result.tweetId,
+          replyText: pending.draftReply,
+        }
+      );
+    } else {
+      await client.chat.postMessage({
+        channel: pending.slackChannel,
+        thread_ts: pending.slackTs,
+        text: `Failed to post reply: ${result.error}`,
+      });
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    await client.chat.postMessage({
+      channel: pending.slackChannel,
+      thread_ts: pending.slackTs,
+      text: `Error posting reply: ${message}`,
+    });
+  } finally {
+    // Clean up pending reply
+    pendingReplies.delete(mentionId);
+  }
+});
+
+// Handle X reply ignore button
+app.action(/^ignore_reply_/, async ({ action, ack, client }) => {
+  await ack();
+
+  if (!('action_id' in action)) return;
+
+  // Extract mention ID from action_id
+  const mentionId = action.action_id.replace('ignore_reply_', '');
+  const pending = pendingReplies.get(mentionId);
+
+  if (!pending) {
+    return; // Already handled or expired
+  }
+
+  try {
+    // Update the Slack message to show it was ignored
+    await client.chat.update({
+      channel: pending.slackChannel,
+      ts: pending.slackTs,
+      text: `Ignored mention from @${pending.mention.authorUsername}`,
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `~*Mention from @${pending.mention.authorUsername}*~\n_Ignored_`,
+          },
+        },
+      ],
+    });
+
+    // Log the action
+    await logActionReceipt(
+      'conversation',
+      `slack_approval_${mentionId}`,
+      'x_reply_ignored',
+      `Ignored mention from @${pending.mention.authorUsername}`,
+      { mentionId }
+    );
+  } finally {
+    // Clean up pending reply
+    pendingReplies.delete(mentionId);
   }
 });
