@@ -63,8 +63,11 @@ async function generateReplyDraft(
     `- Recent completed work items (works table, status='completed', last 48 hours)`,
     `- Recent action receipts (action_receipts table, last 48 hours)`,
     ``,
-    `Then draft a brief reply (max 280 chars) in your voice. Be helpful and contextual.`,
+    `Then draft a reply in your voice. Be helpful and contextual.`,
     `If you find relevant context, reference it naturally.`,
+    ``,
+    `CRITICAL CONSTRAINT: Your reply MUST be 280 characters or less. This is a hard X/Twitter limit.`,
+    `Count carefully. Be concise. If needed, omit details to stay under 280 chars.`,
     ``,
     `IMPORTANT: Your final response should be ONLY the reply text - no explanation or preamble.`
   );
@@ -108,6 +111,8 @@ async function sendForApproval(
     });
   }
 
+  const isOverLimit = draftReply.length > 280;
+
   blocks.push(
     {
       type: 'section',
@@ -121,11 +126,34 @@ async function sendForApproval(
       elements: [
         {
           type: 'mrkdwn',
-          text: `${draftReply.length}/280 characters | <${tweetUrl}|View on X>`,
+          text: isOverLimit
+            ? `*${draftReply.length}/280 characters - too long to post* | <${tweetUrl}|View on X>`
+            : `${draftReply.length}/280 characters | <${tweetUrl}|View on X>`,
         },
       ],
-    },
-    {
+    }
+  );
+
+  if (isOverLimit) {
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `_Reply exceeds 280 character limit. Please reply manually or ignore._`,
+      },
+    });
+    blocks.push({
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: 'Ignore' },
+          action_id: `ignore_reply_${mention.id}`,
+        },
+      ],
+    });
+  } else {
+    blocks.push({
       type: 'actions',
       elements: [
         {
@@ -140,8 +168,8 @@ async function sendForApproval(
           action_id: `ignore_reply_${mention.id}`,
         },
       ],
-    }
-  );
+    });
+  }
 
   const response = await app.client.chat.postMessage({
     channel,
