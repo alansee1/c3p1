@@ -3,6 +3,7 @@ import { runQuizScanner } from './quiz-scanner';
 import { runDailyTweet } from './daily-tweet';
 import { runQuizIdeasScanner } from './quiz-ideas';
 import { runTwitterMentions } from './twitter-mentions';
+import { runYouTubeScanner } from './youtube-scanner';
 
 export function registerAllTasks(): void {
   // Quiz scanner - runs daily at 9am
@@ -31,5 +32,12 @@ export function registerAllTasks(): void {
     name: 'twitter-mentions',
     schedule: '0 10 * * *', // 10 AM UTC daily
     handler: runTwitterMentions,
+  });
+
+  // YouTube trivia scanner - runs Mondays and Thursdays at 11 AM UTC
+  registerTask({
+    name: 'youtube-scanner',
+    schedule: '0 11 * * 1,4', // Mondays and Thursdays at 11 AM UTC
+    handler: runYouTubeScanner,
   });
 }

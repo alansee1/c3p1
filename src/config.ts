@@ -29,4 +29,7 @@ export const config = {
     accessToken: process.env.TWITTER_ACCESS_TOKEN,
     accessTokenSecret: process.env.TWITTER_ACCESS_TOKEN_SECRET,
   },
+  youtube: {
+    apiKey: process.env.YOUTUBE_API_KEY,
+  },
 };
