@@ -1,12 +1,10 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { execSync } from 'child_process';
-import { config } from '../../config';
 import { supabase } from '../../db/client';
 import { app } from '../../slack/app';
 import { addMessage, getConversationKey } from '../../llm/conversation';
+import { getLlmProvider } from '../../llm/provider';
 import type { TaskContext } from '../index';
-
-const claude = new Anthropic({ apiKey: config.anthropic.apiKey });
+import { config } from '../../config';
 
 // How many days before we can suggest the same quiz again
 const SUGGESTION_COOLDOWN_DAYS = 120;
@@ -106,6 +104,7 @@ async function generateQuizIdeas(
   recentSuggestions: string[],
   ctx: TaskContext
 ): Promise<QuizIdea[]> {
+  const llm = getLlmProvider('quizIdeas');
   const eventsText = pages
     .map(p => `=== ${p.title} ===\n${p.content}`)
     .join('\n\n');
@@ -149,26 +148,19 @@ IMPORTANT: Always include the specific date in the "hook" field (e.g., "Apr 18" 
 
 Focus on events happening in the next 1-4 months. Prioritize sports, entertainment, and cultural events that drive significant search traffic.`;
 
-  const response = await claude.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 1000,
-    messages: [{ role: 'user', content: prompt }],
+  const response = await llm.generateJson<{ ideas?: QuizIdea[] }>(prompt, {
+    maxTokens: 1000,
+    taskKey: 'quizIdeas',
   });
 
-  await ctx.logUsage(response.usage.input_tokens, response.usage.output_tokens);
+  await ctx.logUsage(response.usage.inputTokens, response.usage.outputTokens);
 
-  const text = response.content[0].type === 'text' ? response.content[0].text : '';
-
-  try {
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('No JSON found');
-
-    const parsed = JSON.parse(jsonMatch[0]);
-    return parsed.ideas || [];
-  } catch {
-    console.error('[QUIZ_IDEAS] Failed to parse LLM response:', text);
+  if (!response.data?.ideas) {
+    console.error('[QUIZ_IDEAS] Failed to parse LLM response:', response.text);
     return [];
   }
+
+  return response.data.ideas;
 }
 
 async function sendToSlack(ideas: QuizIdea[], pagesChecked: number): Promise<void> {

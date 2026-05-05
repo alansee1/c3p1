@@ -1,12 +1,10 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { execSync } from 'child_process';
 import { config } from '../../config';
 import { supabase } from '../../db/client';
 import { app } from '../../slack/app';
 import { addMessage, getConversationKey } from '../../llm/conversation';
+import { getLlmProvider } from '../../llm/provider';
 import type { TaskContext } from '../index';
-
-const claude = new Anthropic({ apiKey: config.anthropic.apiKey });
 
 interface SearchResult {
   title: string;
@@ -143,6 +141,7 @@ async function analyzePost(
   result: SearchResult,
   ctx: TaskContext
 ): Promise<AnalyzedPost> {
+  const llm = getLlmProvider('quizScanner');
   const prompt = `You are helping find marketing opportunities for Quizio (quizio.io), a free multiplayer browser game where players compete to name countries, US states, capitals, etc. on a map. Great for playing with friends - no download needed.
 
 Analyze this Reddit post and determine if it's a good opportunity to organically mention Quizio:
@@ -171,32 +170,19 @@ Score guide:
 - 5-7: Someone asking for general game recommendations where Quizio could fit
 - 1-4: Not asking for recommendations, or wrong genre entirely`;
 
-  const response = await claude.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 500,
-    messages: [{ role: 'user', content: prompt }],
+  const response = await llm.generateJson<{
+    relevant?: boolean;
+    score?: number;
+    reason?: string;
+    draftResponse?: string;
+  }>(prompt, {
+    maxTokens: 500,
+    taskKey: 'quizScanner',
   });
 
-  // Log API usage
-  await ctx.logUsage(response.usage.input_tokens, response.usage.output_tokens);
+  await ctx.logUsage(response.usage.inputTokens, response.usage.outputTokens);
 
-  const text =
-    response.content[0].type === 'text' ? response.content[0].text : '';
-
-  try {
-    // Extract JSON from response
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('No JSON found');
-
-    const parsed = JSON.parse(jsonMatch[0]);
-    return {
-      result,
-      relevant: parsed.relevant ?? false,
-      score: parsed.score ?? 0,
-      reason: parsed.reason ?? '',
-      draftResponse: parsed.draftResponse ?? '',
-    };
-  } catch {
+  if (!response.data) {
     return {
       result,
       relevant: false,
@@ -205,6 +191,14 @@ Score guide:
       draftResponse: '',
     };
   }
+
+  return {
+    result,
+    relevant: response.data.relevant ?? false,
+    score: response.data.score ?? 0,
+    reason: response.data.reason ?? '',
+    draftResponse: response.data.draftResponse ?? '',
+  };
 }
 
 async function sendToSlack(posts: AnalyzedPost[]): Promise<void> {

@@ -57,6 +57,16 @@ LIMIT 5;
 
 - Always use the query_database tool for data - never make up information.
 - Today's date is ${new Date().toISOString().split('T')[0]}.
+- Prefer the dedicated work-tracking tools over raw SQL when the user is managing projects or work items.
+- Workflows:
+  - "What's on my plate?" -> list active projects or in-progress/pending items first.
+  - "Add work item ..." -> create a pending item for later.
+  - "Start work on ..." -> if it matches a pending item, start that item; otherwise create and start an ad-hoc item.
+  - "Log/finish what I did" -> complete the matching in-progress item with a past-tense completed summary.
+  - "Create 10 X quizzes" -> create a quiz batch automation job linked to a started work item.
+- When there is ambiguity between multiple projects or multiple in-progress items, ask a short clarifying question instead of guessing.
+- When Alan directs you via chat to create or complete a work item, log it as "manual" ownership/completion. Reserve "c3p1" for autonomous bot-driven work, not user-directed updates.
+- Prefer "create_quiz_batch_job" over generic work-item creation when the user is asking for a batch of quizzes to be generated.
 `;
 
 export const SYSTEM_PROMPT = `${soul}\n${capabilities}`;

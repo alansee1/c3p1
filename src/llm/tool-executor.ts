@@ -1,12 +1,21 @@
 import { supabase } from '../db/client';
 import {
   addWorkItem,
+  createAutomationJob,
   completeWorkItem,
+  getProjectBySlug,
+  getActiveProjects,
+  getPendingWork,
+  getInProgressWork,
+  getRecentCompletedWork,
+  getWorkItemById,
+  listAutomationJobs,
+  startWorkItem,
   updateWorkItem,
   deleteWorkItem,
-  getProjectBySlug,
   logActionReceipt,
 } from '../db/queries';
+import type { AutomationJobStatus } from '../db/types';
 import type { TriggerType } from '../db/types';
 
 export interface ToolContext {
@@ -18,11 +27,19 @@ export interface ToolContext {
 interface ToolInput {
   sql?: string;
   project_slug?: string;
+  status?: 'pending' | 'in_progress' | 'completed';
+  automation_status?: AutomationJobStatus;
+  limit?: number;
   summary?: string;
   tags?: string[];
   work_id?: number;
   completed_summary?: string;
+  family?: string;
+  requested_count?: number;
+  request_payload?: Record<string, unknown>;
 }
+
+const USER_DRIVEN_AGENT = 'manual';
 
 function logTool(name: string, input: ToolInput, result: string): void {
   console.log(`[TOOL] ${name}`);
@@ -48,6 +65,75 @@ export async function executeTool(
 
   try {
     switch (name) {
+      case 'list_automation_jobs': {
+        let projectId: number | undefined;
+        if (input.project_slug) {
+          const project = await getProjectBySlug(input.project_slug);
+          if (!project) {
+            result = JSON.stringify({ error: `Project "${input.project_slug}" not found` });
+            break;
+          }
+          projectId = project.id;
+        }
+
+        const jobs = await listAutomationJobs({
+          projectId,
+          status: input.status as AutomationJobStatus | undefined,
+          limit: input.limit,
+        });
+
+        result = JSON.stringify({ jobs });
+        actionType = 'automation_jobs_listed';
+        actionSummary = `Listed ${jobs.length} automation job(s)`;
+        actionMetadata = {
+          project_slug: input.project_slug ?? null,
+          status: input.status ?? null,
+          count: jobs.length,
+        };
+        break;
+      }
+
+      case 'list_projects': {
+        const projects = await getActiveProjects();
+        result = JSON.stringify({ projects });
+        actionType = 'project_listed';
+        actionSummary = `Listed ${projects.length} active projects`;
+        actionMetadata = { count: projects.length };
+        break;
+      }
+
+      case 'list_work_items': {
+        if (!input.status) {
+          result = JSON.stringify({ error: 'status is required' });
+          break;
+        }
+
+        let projectId: number | undefined;
+        if (input.project_slug) {
+          const project = await getProjectBySlug(input.project_slug);
+          if (!project) {
+            result = JSON.stringify({ error: `Project "${input.project_slug}" not found` });
+            break;
+          }
+          projectId = project.id;
+        }
+
+        let items;
+        if (input.status === 'pending') {
+          items = await getPendingWork(projectId);
+        } else if (input.status === 'in_progress') {
+          items = await getInProgressWork(projectId);
+        } else {
+          items = await getRecentCompletedWork(projectId, input.limit || 10);
+        }
+
+        result = JSON.stringify({ items });
+        actionType = 'work_items_listed';
+        actionSummary = `Listed ${items.length} ${input.status} work item(s)`;
+        actionMetadata = { project_slug: input.project_slug ?? null, status: input.status, count: items.length };
+        break;
+      }
+
       case 'query_database': {
         if (!input.sql) {
           result = JSON.stringify({ error: 'sql is required' });
@@ -101,7 +187,7 @@ export async function executeTool(
           .limit(5);
         const styleExamples = recentWork?.map(w => w.completed_summary) || [];
 
-        const item = await addWorkItem(project.id, input.summary, input.tags);
+        const item = await addWorkItem(project.id, input.summary, input.tags, USER_DRIVEN_AGENT, null);
 
         result = JSON.stringify({
           success: true,
@@ -120,11 +206,101 @@ export async function executeTool(
           result = JSON.stringify({ error: 'work_id is required' });
           break;
         }
-        const completedItem = await completeWorkItem(input.work_id, input.completed_summary);
+        const existing = await getWorkItemById(input.work_id);
+        if (!existing) {
+          result = JSON.stringify({ error: `Work item ${input.work_id} not found` });
+          break;
+        }
+        const completedItem = await completeWorkItem(input.work_id, input.completed_summary, USER_DRIVEN_AGENT);
         result = JSON.stringify({ success: true, item: completedItem });
         actionType = 'work_item_completed';
         actionSummary = `Completed work item #${input.work_id}`;
         actionMetadata = { work_id: input.work_id, completed_summary: input.completed_summary };
+        break;
+      }
+
+      case 'start_work_item': {
+        if (!input.work_id) {
+          result = JSON.stringify({ error: 'work_id is required' });
+          break;
+        }
+        const existing = await getWorkItemById(input.work_id);
+        if (!existing) {
+          result = JSON.stringify({ error: `Work item ${input.work_id} not found` });
+          break;
+        }
+        const startedItem = await startWorkItem(input.work_id);
+        result = JSON.stringify({ success: true, item: startedItem });
+        actionType = 'work_item_started';
+        actionSummary = `Started work item #${input.work_id}`;
+        actionMetadata = { work_id: input.work_id };
+        break;
+      }
+
+      case 'create_and_start_work_item': {
+        if (!input.project_slug || !input.summary || !input.tags) {
+          result = JSON.stringify({ error: 'project_slug, summary, and tags are required' });
+          break;
+        }
+        const project = await getProjectBySlug(input.project_slug);
+        if (!project) {
+          result = JSON.stringify({ error: `Project "${input.project_slug}" not found` });
+          break;
+        }
+        const item = await addWorkItem(project.id, input.summary, input.tags, USER_DRIVEN_AGENT, null);
+        const startedItem = await startWorkItem(item.id);
+        result = JSON.stringify({ success: true, item: startedItem });
+        actionType = 'work_item_created_and_started';
+        actionSummary = `Created and started work item: ${input.summary}`;
+        actionMetadata = { work_id: startedItem.id, project_slug: input.project_slug, tags: input.tags };
+        break;
+      }
+
+      case 'create_quiz_batch_job': {
+        if (!input.project_slug || !input.family || !input.requested_count) {
+          result = JSON.stringify({ error: 'project_slug, family, and requested_count are required' });
+          break;
+        }
+
+        const project = await getProjectBySlug(input.project_slug);
+        if (!project) {
+          result = JSON.stringify({ error: `Project "${input.project_slug}" not found` });
+          break;
+        }
+
+        const tags = input.tags ?? ['automation', 'quiz-batch', input.family];
+        const summary = input.summary || `Create ${input.requested_count} ${input.family} quizzes`;
+        const workItem = await addWorkItem(project.id, summary, tags, USER_DRIVEN_AGENT, null);
+        const startedWorkItem = await startWorkItem(workItem.id);
+
+        const requestPayload = {
+          family: input.family,
+          requested_count: input.requested_count,
+          ...(input.request_payload ?? {}),
+        };
+
+        const job = await createAutomationJob({
+          jobType: 'quiz_batch_create',
+          projectId: project.id,
+          workId: startedWorkItem.id,
+          requestPayload,
+          agentId: 'c3p1',
+        });
+
+        result = JSON.stringify({
+          success: true,
+          work_item: startedWorkItem,
+          automation_job: job,
+        });
+        actionType = 'quiz_batch_job_created';
+        actionSummary = `Created quiz batch job for ${input.requested_count} ${input.family} quizzes`;
+        actionMetadata = {
+          work_id: startedWorkItem.id,
+          automation_job_id: job.id,
+          project_slug: input.project_slug,
+          family: input.family,
+          requested_count: input.requested_count,
+        };
         break;
       }
 

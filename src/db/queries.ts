@@ -1,5 +1,5 @@
 import { supabase } from './client';
-import type { Project, WorkItem, WorkItemWithProject, Message, ActionReceipt, ApiUsage, TriggerType, TaskRun, TaskStatus } from './types';
+import type { Project, WorkItem, WorkItemWithProject, Message, ActionReceipt, ApiUsage, TriggerType, TaskRun, TaskStatus, AutomationJob, AutomationJobStatus, AutomationJobWithProject } from './types';
 
 // Work item queries
 
@@ -55,6 +55,21 @@ export async function getRecentCompletedWork(
   return data as WorkItemWithProject[];
 }
 
+export async function getWorkItemById(workId: number): Promise<WorkItem | null> {
+  const { data, error } = await supabase
+    .from('works')
+    .select('*')
+    .eq('id', workId)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw new Error(`Failed to fetch work item: ${error.message}`);
+  }
+
+  return data as WorkItem;
+}
+
 export async function getCompletedWorkSince(
   hoursAgo = 24
 ): Promise<WorkItemWithProject[]> {
@@ -74,7 +89,9 @@ export async function getCompletedWorkSince(
 export async function addWorkItem(
   projectId: number,
   summary: string,
-  tags: string[] = []
+  tags: string[] = [],
+  sourceAgent = 'manual',
+  sourceModel: string | null = null
 ): Promise<WorkItem> {
   const { data, error } = await supabase
     .from('works')
@@ -82,6 +99,8 @@ export async function addWorkItem(
       project_id: projectId,
       summary,
       tags,
+      source_agent: sourceAgent,
+      source_model: sourceModel,
       status: 'pending',
     })
     .select()
@@ -108,13 +127,15 @@ export async function startWorkItem(workId: number): Promise<WorkItem> {
 
 export async function completeWorkItem(
   workId: number,
-  completedSummary?: string
+  completedSummary?: string,
+  completedByAgent = 'manual'
 ): Promise<WorkItem> {
   const { data, error } = await supabase
     .from('works')
     .update({
       status: 'completed',
       completed_at: new Date().toISOString(),
+      completed_by_agent: completedByAgent,
       ...(completedSummary && { completed_summary: completedSummary }),
     })
     .eq('id', workId)
@@ -421,4 +442,131 @@ export async function failTaskRun(
 
   if (error) throw new Error(`Failed to fail task run: ${error.message}`);
   return data as TaskRun;
+}
+
+// Automation job queries
+
+export async function createAutomationJob(params: {
+  jobType: string;
+  projectId: number;
+  workId?: number | null;
+  requestPayload?: Record<string, unknown>;
+  agentId?: string;
+}): Promise<AutomationJob> {
+  const { data, error } = await supabase
+    .from('automation_jobs')
+    .insert({
+      job_type: params.jobType,
+      agent_id: params.agentId || 'c3p1',
+      project_id: params.projectId,
+      work_id: params.workId ?? null,
+      status: 'queued',
+      request_payload: params.requestPayload ?? {},
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to create automation job: ${error.message}`);
+  return data as AutomationJob;
+}
+
+export async function getAutomationJobById(jobId: number): Promise<AutomationJob | null> {
+  const { data, error } = await supabase
+    .from('automation_jobs')
+    .select('*')
+    .eq('id', jobId)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') return null;
+    throw new Error(`Failed to fetch automation job: ${error.message}`);
+  }
+
+  return data as AutomationJob;
+}
+
+export async function listAutomationJobs(params?: {
+  projectId?: number;
+  status?: AutomationJobStatus;
+  limit?: number;
+}): Promise<AutomationJobWithProject[]> {
+  let query = supabase
+    .from('automation_jobs')
+    .select('*, project:projects(id, slug, title)')
+    .order('created_at', { ascending: false });
+
+  if (params?.projectId) {
+    query = query.eq('project_id', params.projectId);
+  }
+
+  if (params?.status) {
+    query = query.eq('status', params.status);
+  }
+
+  if (params?.limit) {
+    query = query.limit(params.limit);
+  }
+
+  const { data, error } = await query;
+  if (error) throw new Error(`Failed to list automation jobs: ${error.message}`);
+  return data as AutomationJobWithProject[];
+}
+
+export async function startAutomationJob(jobId: number): Promise<AutomationJob> {
+  const { data, error } = await supabase
+    .from('automation_jobs')
+    .update({
+      status: 'running',
+      started_at: new Date().toISOString(),
+    })
+    .eq('id', jobId)
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to start automation job: ${error.message}`);
+  return data as AutomationJob;
+}
+
+export async function completeAutomationJob(
+  jobId: number,
+  resultPayload?: Record<string, unknown>
+): Promise<AutomationJob> {
+  const { data, error } = await supabase
+    .from('automation_jobs')
+    .update({
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+      result_payload: resultPayload ?? null,
+    })
+    .eq('id', jobId)
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to complete automation job: ${error.message}`);
+  return data as AutomationJob;
+}
+
+export async function failAutomationJob(
+  jobId: number,
+  errorMessage: string,
+  resultPayload?: Record<string, unknown>
+): Promise<AutomationJob> {
+  const mergedPayload = {
+    ...(resultPayload ?? {}),
+    error: errorMessage,
+  };
+
+  const { data, error } = await supabase
+    .from('automation_jobs')
+    .update({
+      status: 'failed',
+      completed_at: new Date().toISOString(),
+      result_payload: mergedPayload,
+    })
+    .eq('id', jobId)
+    .select()
+    .single();
+
+  if (error) throw new Error(`Failed to fail automation job: ${error.message}`);
+  return data as AutomationJob;
 }
