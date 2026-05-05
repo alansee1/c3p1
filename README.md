@@ -116,3 +116,9 @@ This is the foundation for the eventual flow:
 - start work
 - run the batch
 - log what got created
+
+Current runner status:
+- queued jobs can now be picked up by the `automation-jobs` scheduler task
+- jobs transition through `queued -> running -> completed/failed`
+- successful jobs can auto-complete linked work items as `completed_by_agent = 'c3p1'`
+- `quiz_batch_create` handler plumbing exists, but family-specific generation is still the next implementation step

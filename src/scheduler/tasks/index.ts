@@ -4,6 +4,7 @@ import { runDailyTweet } from './daily-tweet';
 import { runQuizIdeasScanner } from './quiz-ideas';
 import { runTwitterMentions } from './twitter-mentions';
 import { runYouTubeScanner } from './youtube-scanner';
+import { runAutomationJobsTask } from './automation-jobs';
 
 export function registerAllTasks(): void {
   // Quiz scanner - runs daily at 9am
@@ -39,5 +40,12 @@ export function registerAllTasks(): void {
     name: 'youtube-scanner',
     schedule: '0 11 * * 1,4', // Mondays and Thursdays at 11 AM UTC
     handler: runYouTubeScanner,
+  });
+
+  // Automation jobs - runs every 5 minutes
+  registerTask({
+    name: 'automation-jobs',
+    schedule: '*/5 * * * *',
+    handler: runAutomationJobsTask,
   });
 }
