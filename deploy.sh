@@ -5,7 +5,7 @@ echo "Deploying C3P1..."
 
 cd ~/c3p1
 git pull
-npm install
+npm ci
 npm run build
 sudo systemctl restart cortana
 
