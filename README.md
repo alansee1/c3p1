@@ -14,7 +14,8 @@ Personal AI assistant running on Raspberry Pi 5, integrated with Slack.
 Code runs on the Pi. To deploy changes:
 
 1. Push to main from your dev machine
-2. SSH to the Pi and run `./c3p1/deploy.sh`
+2. Connect to the Pi through Raspberry Pi Connect: https://connect.raspberrypi.com/
+3. SSH to the Pi and run `./c3p1/deploy.sh`
 
 The deploy script pulls latest, builds, and restarts the systemd service (`cortana`).
 

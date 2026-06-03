@@ -53,6 +53,10 @@ export async function runDailyTweet(ctx: TaskContext): Promise<string> {
 
   // Get Alan's completed work from last 24 hours
   const workItems = await getCompletedWorkSince(24);
+  if (workItems.length === 0) {
+    await ctx.logAction('tweet_skipped_no_work', 'No completed work in last 24h; skipping daily X report');
+    return 'Skipped: no completed work in last 24h';
+  }
 
   // Get API costs
   const usage = await getRecentApiUsage(24);
